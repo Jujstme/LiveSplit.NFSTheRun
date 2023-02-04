@@ -5,6 +5,7 @@ use asr::{
     watcher::Watcher,
     Address,
     Process,
+    signature::Signature,
 };
 
 #[cfg(all(not(test), target_arch = "wasm32"))]
@@ -125,15 +126,15 @@ impl SigScan {
         let size = 0x3200000; // temporary hack until we can actually query ModuleMemorySize
 
         // Sigscan for easy value
-        let sig: asr::signature::Signature<8> = asr::signature::Signature::new("39 05 ???????? 6A 00");
+        let sig: Signature<8> = Signature::new("39 05 ???????? 6A 00");
         let mut scan = sig.scan_process_range(process, addr, size)?;
-        let Some(is_loading) = process.read::<u32>(Address(scan.0 + 2)).ok() else { return None };
+        let is_loading = process.read::<u32>(Address(scan.0 + 2)).ok()?;
 
         // Sligthly harder to find value
-        let sig: asr::signature::Signature<14> = asr::signature::Signature::new("E8 ???????? E8 ???????? 38 5C 24 14");
+        let sig: Signature<14> = Signature::new("E8 ???????? E8 ???????? 38 5C 24 14");
         scan = sig.scan_process_range(process, addr, size)?;
-        let Some(address) = process.read::<u32>(Address(scan.0 + 1)).ok() else { return None };
-        let Some(fade) = process.read::<u32>(Address(scan.0 + 5 + address as u64 + 0x14)).ok() else { return None };
+        let address = process.read::<u32>(Address(scan.0 + 1)).ok()?;
+        let fade = process.read::<u32>(Address(scan.0 + 0x5 + address as u64 + 0x14)).ok()?;
 
         Some(Self {
             is_loading: Address(is_loading as u64),
