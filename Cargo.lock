@@ -8,6 +8,7 @@ version = "0.1.0"
 source = "git+https://github.com/CryZe/asr#57a9b79ea61e7ac6ab8ec117a83cbf3b03ae54c9"
 dependencies = [
  "bytemuck",
+ "memchr",
  "time",
 ]
 
@@ -54,6 +55,12 @@ dependencies = [
  "autocfg",
  "scopeguard",
 ]
+
+[[package]]
+name = "memchr"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 
 [[package]]
 name = "proc-macro2"
