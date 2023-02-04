@@ -38,6 +38,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "livesplit_nfstherun"
+version = "0.1.0"
+dependencies = [
+ "asr",
+ "spinning_top",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -89,14 +97,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "test_splitter"
-version = "0.1.0"
-dependencies = [
- "asr",
- "spinning_top",
 ]
 
 [[package]]

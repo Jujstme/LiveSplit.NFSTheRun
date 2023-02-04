@@ -1,5 +1,5 @@
 [package]
-name = "test_splitter"
+name = "livesplit_nfstherun"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,3 +11,12 @@ spinning_top = "0.2.4"
 
 [lib]
 crate-type = ["cdylib"]
+
+[profile.release]
+lto = true
+panic = "abort"
+codegen-units = 1
+strip = true
+
+[profile.release.build-override]
+opt-level = 0
