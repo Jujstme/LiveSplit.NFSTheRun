@@ -58,6 +58,9 @@ impl State {
         
         let Some(game) = proc else { return None };
 
+        // Sets the tick rate to 60hz because I think 120 (the default value) is overkill for this autosplitter
+        asr::set_tick_rate(60.0);
+
         let main_module_base = game.get_module_address(curgamename).ok()?;
         //let main_module_size = game.get_module_size(curgamename).ok()?;
 
@@ -109,8 +112,6 @@ impl State {
 
 #[no_mangle]
 pub extern "C" fn update() {
-    // Sets the tick rate to 60hz because I think 120 (the default value) is overkill for this autosplitter
-    asr::set_tick_rate(60.0);
     AUTOSPLITTER.lock().update();
 }
 
