@@ -1,12 +1,5 @@
 #![no_std]
-use asr::{
-    timer,
-    timer::TimerState,
-    watcher::Watcher,
-    Address,
-    Process,
-    signature::Signature,
-};
+use asr::{signature::Signature, timer, timer::TimerState, watcher::Watcher, Address, Process};
 
 #[cfg(all(not(test), target_arch = "wasm32"))]
 #[panic_handler]
@@ -18,7 +11,7 @@ static AUTOSPLITTER: spinning_top::Spinlock<State> = spinning_top::const_spinloc
     game: None,
     sigscans: None,
     watchers: Watchers {
-        is_loading: Watcher::new(),
+        state: Watcher::new(),
         fade: Watcher::new(),
     },
     // settings: None,
@@ -32,7 +25,7 @@ struct State {
 }
 
 struct Watchers {
-    is_loading: Watcher<u8>,
+    state: Watcher<u8>,
     fade: Watcher<f32>,
 }
 
@@ -44,30 +37,25 @@ struct ProcessInfo {
 
 impl State {
     fn attach_process() -> Option<ProcessInfo> {
+        const PROCESS_NAMES: [&str; 1] = ["Need For Speed The Run.exe"];
         let mut proc: Option<Process> = None;
-        let mut curgamename: &str = "";
-        
+
         for name in PROCESS_NAMES {
-            let iproc = Process::attach(name);
-            if iproc.is_some() {
-                proc = iproc;
-                curgamename = name;
+            proc = Process::attach(name);
+            if proc.is_some() {
                 break;
             }
         }
 
         let game = proc?;
-        
+
         // Sets the tick rate to 60hz because I think 120 (the default value) is overkill for this autosplitter
         asr::set_tick_rate(60.0);
 
-        let main_module_base = game.get_module_address(curgamename).ok()?;
-        //let main_module_size = game.get_module_size(curgamename).ok()?;
-
         Some(ProcessInfo {
             game,
-            main_module_base,
-            //main_module_size, // currently broken in livesplit classic
+            main_module_base: Address(0x400000), // Querying it fails for some reason, but as this game doesn't use ASLR, the base address is always the same
+            //main_module_size: game.get_module_size(curgamename).ok()?, // currently broken in livesplit classic
         })
     }
 
@@ -78,8 +66,10 @@ impl State {
         }
         let Some(game) = &self.game else { return };
         let proc = &game.game;
+
         if !proc.is_open() {
             self.game = None;
+            if timer::state() == TimerState::Running { timer::pause_game_time() } // If the game crashes, game time should be paused
             return;
         };
 
@@ -88,15 +78,13 @@ impl State {
         let Some(addresses) = &self.sigscans else { self.sigscans = SigScan::new(proc, game.main_module_base); return; };
 
         // Update the watchers variables
-        let Some(is_loading) = self.watchers.is_loading.update(proc.read(addresses.is_loading).ok()) else { return };
+        let Some(state) = self.watchers.state.update(proc.read_pointer_path32(addresses.state.0 as u32, &[0x0, 0x44, 0x18]).ok()) else { return };
         let Some(fade) = self.watchers.fade.update(proc.read(addresses.fade).ok()) else { return };
 
         // Splitting logic
         match timer::state() {
             TimerState::Running => {
-                if is_loading.current == 0 {
-                    timer::resume_game_time()
-                } else if fade.current == 1.0 {
+                if state.current == 1 && fade.current == 1.0 {
                     timer::pause_game_time()
                 } else {
                     timer::resume_game_time()
@@ -113,32 +101,27 @@ pub extern "C" fn update() {
 }
 
 struct SigScan {
-    is_loading: Address,
+    state: Address,
     fade: Address,
 }
 
 impl SigScan {
     fn new(process: &Process, addr: Address) -> Option<Self> {
-        let size = 0x3200000; // temporary hack until we can actually query ModuleMemorySize
+        let size = 0x3200000; // Hack, until we can actually query ModuleMemorySize
+ 
+        const SIG: Signature<8> = Signature::new("A1 ???????? D9 45 08");
+        let mut scan = SIG.scan_process_range(process, addr, size)?;
+        let state = process.read::<u32>(Address(scan.0 + 1)).ok()? as u64;
 
-        // Sigscan for easy value
-        let sig: Signature<8> = Signature::new(SIG_IS_LOADING);
-        let mut scan = sig.scan_process_range(process, addr, size)?;
-        let is_loading = process.read::<u32>(Address(scan.0 + 2)).ok()?;
+        const SIG_FADE: Signature<14> = Signature::new("E8 ???????? E8 ???????? 38 5C 24 14");
+        scan = SIG_FADE.scan_process_range(process, addr, size)?;
+        let mut fade = process.read::<u32>(Address(scan.0 + 1)).ok()? as u64;
+        fade = process.read::<u32>(Address(scan.0 + 0x5 + fade + 0x14)).ok()? as u64;
 
-        // Sligthly harder to find value
-        let sig: Signature<14> = Signature::new(SIG_FADE);
-        scan = sig.scan_process_range(process, addr, size)?;
-        let address = process.read::<u32>(Address(scan.0 + 1)).ok()?;
-        let fade = process.read::<u32>(Address(scan.0 + 0x5 + address as u64 + 0x14)).ok()?;
 
         Some(Self {
-            is_loading: Address(is_loading as u64),
-            fade: Address(fade as u64 + 0x4),
+            state: Address(state),
+            fade: Address(fade + 0x4),
         })
     }
 }
-
-const PROCESS_NAMES: [&str; 1] = ["Need For Speed The Run.exe"];
-const SIG_IS_LOADING: &str = "39 05 ???????? 6A 00";
-const SIG_FADE: &str = "E8 ???????? E8 ???????? 38 5C 24 14";
